@@ -837,7 +837,7 @@ function updateGlobalPollIndicator(){
 async function fetchPinValue(pinId){
   const st=pinState[pinId];
   try{
-    const res=await fetch(`http://localhost:8000/api/pin/${pinId}`);
+    const res=await fetch(`https://esp32simulator-production.up.railway.app/api/pin/${pinId}`);
     if(!res.ok)throw new Error('not ok');
     const data=await res.json();
     // backend returns { gpio, value, signal_type, ... }
@@ -1133,7 +1133,7 @@ function sendPin(){
   const payload={gpio:pin.id,label:pin.label,mode:st.mode,signal_type:st.signalType,
     value:st.value,pull_mode:st.pullMode,frequency:st.freq,
     digital_state:st.digitalState,touch_state:st.touchState,timestamp:Date.now()};
-  fetch('http://localhost:8000/api/pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+  fetch('https://esp32simulator-production.up.railway.app/api/pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     .then(()=>showToast('Output sent ✓','success'))
     .catch(()=>showToast('Backend unreachable','error'));
   const btn=document.getElementById('sendBtn');
@@ -1170,7 +1170,7 @@ function resetAll(){
 function connectWS(){
   const dot=document.getElementById('wsDot'),lbl=document.getElementById('wsLabel');
   try{
-    ws=new WebSocket('ws://localhost:8000/ws');
+    ws=new WebSocket('ws://esp32simulator-production.up.railway.app/ws');
     ws.onopen=()=>{dot.className='ws-dot on';lbl.textContent='WS: ON';};
     ws.onclose=()=>{dot.className='ws-dot';lbl.textContent='WS: OFF';setTimeout(connectWS,5000);};
     ws.onerror=()=>{dot.className='ws-dot';lbl.textContent='WS: ERR';};
