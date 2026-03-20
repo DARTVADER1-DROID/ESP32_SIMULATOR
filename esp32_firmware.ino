@@ -23,7 +23,7 @@
 // ─── CONFIGURATION ────────────────────────────────────────────
 #define WIFI_SSID        "DESKTOP-lol"
 #define WIFI_PASSWORD    "12345678"
-#define BACKEND_HOST     "https://bms-production-2a2c.up.railway.app:443"   // ← your PC's local IP
+#define BACKEND_HOST     "https://esp32simulator-production.up.railway.app:8080"   // ← your PC's local IP
 
 // How often to push readings and pull output commands (milliseconds)
 #define PUSH_INTERVAL_MS   200     // push sensor readings every 200ms
