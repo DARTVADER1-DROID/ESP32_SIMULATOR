@@ -6,7 +6,6 @@
  *   - Pushes readings to backend (POST /api/esp32/readings/batch)
  *   - Polls backend for OUTPUT commands (GET /api/esp32/outputs)
  *   - Applies output commands to actual GPIO pins
- *   - Sends periodic heartbeat (POST /api/esp32/ping)
  *
  * Required Arduino Libraries:
  *   - WiFi.h            (built-in ESP32)
@@ -31,7 +30,6 @@
 #define PUSH_INTERVAL_MS   200     // push sensor readings every 200ms
 #define PULL_INTERVAL_MS   300     // pull output commands every 300ms
 #define CONFIG_SYNC_MS    5000     // re-sync pin config from backend every 5s
-#define PING_INTERVAL_MS  3000     // send heartbeat ping every 3s
 
 // DAC resolution (8-bit for ESP32)
 #define DAC_MAX  255
@@ -77,7 +75,6 @@ int     pinCount = 0;
 unsigned long lastPush   = 0;
 unsigned long lastPull   = 0;
 unsigned long lastSync   = 0;
-unsigned long lastPing   = 0;
 bool          wifiOk     = false;
 
 
@@ -146,38 +143,33 @@ void connectWiFi() {
 // ─── HTTP HELPERS ─────────────────────────────────────────────
 String httpGET(const String& path) {
   if (WiFi.status() != WL_CONNECTED) return "";
+  
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
   http.begin(client, String(BACKEND_HOST) + path);
-  http.setTimeout(5000);
+  http.setTimeout(5000);  // Increased from 2000ms for HTTPS handshake
   int code = http.GET();
   String body = "";
   if (code == 200) body = http.getString();
+  else Serial.printf("[HTTP] GET %s → %d\n", path.c_str(), code);
   http.end();
   return body;
 }
 
 int httpPOST(const String& path, const String& payload) {
   if (WiFi.status() != WL_CONNECTED) return -1;
+  
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
   http.begin(client, String(BACKEND_HOST) + path);
   http.addHeader("Content-Type", "application/json");
-  http.setTimeout(5000);
+  http.setTimeout(5000);  // Increased from 2000ms for HTTPS handshake
   int code = http.POST(payload);
+  if (code != 200) Serial.printf("[HTTP] POST %s → %d\n", path.c_str(), code);
   http.end();
   return code;
-}
-
-
-// ─── PING BACKEND (HEARTBEAT) ─────────────────────────────────
-void pingBackend() {
-  int code = httpPOST("/api/esp32/ping", "{}");
-  if (code == 200) {
-    Serial.println("[PING] OK");
-  }
 }
 
 
@@ -201,9 +193,7 @@ void syncPinConfig() {
     if (deserializeJson(doc, inputsBody) == DeserializationError::Ok) {
       JsonObject inputs = doc["inputs"].as<JsonObject>();
       for (JsonPair kv : inputs) {
-        if (!kv.key().c_str()) continue;
         int gpio = atoi(kv.key().c_str());
-        if (gpio == 0 && kv.key().c_str()[0] != '0') continue;
         if (!isGpioSafe(gpio)) continue;
 
         const char* sigTypeStr = kv.value()["signal_type"] | "DIGITAL";
@@ -258,9 +248,7 @@ void syncPinConfig() {
     if (deserializeJson(doc, outputsBody) == DeserializationError::Ok) {
       JsonObject outputs = doc["outputs"].as<JsonObject>();
       for (JsonPair kv : outputs) {
-        if (!kv.key().c_str()) continue;
         int gpio = atoi(kv.key().c_str());
-        if (gpio == 0 && kv.key().c_str()[0] != '0') continue;
         if (!isGpioSafe(gpio) || !isOutputCapable(gpio)) continue;
 
         const char* sigTypeStr = kv.value()["signal_type"] | "DIGITAL";
@@ -398,20 +386,13 @@ void pushReadings() {
 
   String payload;
   serializeJson(doc, payload);
-  httpPOST("/api/esp32/readings/batch", payload);
-  
-  // Non-blocking LED blink using timing
-  static unsigned long ledBlinkTime = 0;
-  static bool ledState = false;
+  int code = httpPOST("/api/esp32/readings/batch", payload);
+
+  // Blink activity LED
   if (ACTIVITY_LED >= 0) {
-    if (!ledState) {
-      digitalWrite(ACTIVITY_LED, HIGH);
-      ledState = true;
-      ledBlinkTime = millis();
-    } else if (millis() - ledBlinkTime > 10) {
-      digitalWrite(ACTIVITY_LED, LOW);
-      ledState = false;
-    }
+    digitalWrite(ACTIVITY_LED, HIGH);
+    delay(10);
+    digitalWrite(ACTIVITY_LED, LOW);
   }
 }
 
@@ -504,7 +485,6 @@ void setup() {
     delay(500);
     syncPinConfig();
     lastSync = millis();
-    lastPing = millis();
   }
 }
 
@@ -521,12 +501,6 @@ void loop() {
     return;
   }
   wifiOk = true;
-
-  // Send heartbeat ping every PING_INTERVAL_MS
-  if (now - lastPing >= PING_INTERVAL_MS) {
-    pingBackend();
-    lastPing = now;
-  }
 
   // Re-sync config every CONFIG_SYNC_MS
   // This picks up any new pins the user configured in the simulator
