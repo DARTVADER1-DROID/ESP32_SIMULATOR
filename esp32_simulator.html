@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>ESP32 Pin Simulator</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
@@ -19,6 +19,7 @@
   --text:#bdd0e0;--text2:#6a8aa5;--text3:#3a5a75;
   --font-mono:'JetBrains Mono',monospace;
   --font-ui:'Rajdhani',sans-serif;
+  --mobile-breakpoint: 768px;
 }
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden}
@@ -34,22 +35,18 @@ header{position:relative;z-index:10;flex-shrink:0;display:flex;align-items:cente
 @keyframes hpulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.4) drop-shadow(0 0 6px var(--green))}}
 .logo-name{font-family:var(--font-ui);font-size:20px;font-weight:700;letter-spacing:3px;color:var(--green);text-shadow:0 0 16px var(--green-glow)}
 .logo-tag{font-size:9px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-top:1px}
-.header-right{display:flex;align-items:center;gap:12px}
-.poll-pill{display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;font-size:9px;letter-spacing:1px;color:var(--text3)}
-.poll-dot{width:5px;height:5px;border-radius:50%;background:var(--amber);transition:background 0.3s}
+.header-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.pill{display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;font-size:9px;letter-spacing:1px;color:var(--text3)}
+.pill-dot{width:5px;height:5px;border-radius:50%;transition:background 0.3s}
 .poll-dot.active{background:var(--green);box-shadow:0 0 5px var(--green);animation:blink 0.6s ease-in-out infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
-.ws-pill{display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;font-size:9px;letter-spacing:1px;color:var(--text3)}
-.ws-dot{width:5px;height:5px;border-radius:50%;background:var(--red);transition:all 0.4s}
 .ws-dot.on{background:var(--green);box-shadow:0 0 5px var(--green)}
-.clock{font-size:11px;color:var(--text3);letter-spacing:1px;min-width:88px;text-align:right}
-.hw-pill{display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;font-size:9px;letter-spacing:1px;color:var(--text3)}
+.ws-dot{background:var(--red);transition:all 0.4s}
 .hw-indicator{width:5px;height:5px;border-radius:50%;background:var(--red);transition:all 0.4s}
 .hw-indicator.connected{background:var(--green);box-shadow:0 0 5px var(--green)}
 .clock{font-size:11px;color:var(--text3);letter-spacing:1px;min-width:88px;text-align:right}
-.hw-pill{display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;font-size:9px;letter-spacing:1px;color:var(--text3)}
-.hw-indicator{width:5px;height:5px;border-radius:50%;background:var(--red);transition:all 0.4s}
-.hw-indicator.connected{background:var(--green);box-shadow:0 0 5px var(--green)}
+.config-btn{padding:5px 10px;background:var(--bg2);border:1px solid var(--border);color:var(--text3);font-family:var(--font-mono);font-size:9px;letter-spacing:1px;cursor:pointer;border-radius:3px;transition:all 0.15s;white-space:nowrap}
+.config-btn:hover{border-color:var(--border2);color:var(--text2)}
 
 /* ── LAYOUT ── */
 .app{position:relative;z-index:1;flex:1;min-height:0;display:grid;grid-template-columns:1fr 340px;grid-template-rows:1fr 200px}
@@ -60,8 +57,8 @@ header{position:relative;z-index:10;flex-shrink:0;display:flex;align-items:cente
 .board-hint{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:9px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;pointer-events:none;background:var(--bg1);border:1px solid var(--border);padding:3px 10px;border-radius:3px;white-space:nowrap}
 .zoom-controls{position:absolute;top:10px;left:10px;display:flex;flex-direction:column;gap:4px;z-index:5}
 .zoom-btn{width:28px;height:28px;background:var(--bg2);border:1px solid var(--border);color:var(--text2);font-size:15px;cursor:pointer;border-radius:3px;transition:all 0.15s;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono)}
-.zoom-btn:hover{border-color:var(--border2);color:var(--text);background:var(--bg3)}
-.board-canvas{position:absolute;top:0;left:0;transform-origin:0 0}
+.zoom-btn:hover{border-color:var(--border2);color:var(--text)}
+.board-canvas{position:absolute;top:0;left:0;transform-origin:0 0;touch-action:none}
 
 /* ── PANEL ── */
 .panel{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;background:var(--bg1);border-left:1px solid var(--border);overflow:hidden}
@@ -127,11 +124,12 @@ header{position:relative;z-index:10;flex-shrink:0;display:flex;align-items:cente
 .slider-sub{font-size:9px;color:var(--text3);letter-spacing:1px}
 input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:var(--bg4);border-radius:2px;outline:none;margin-bottom:6px;cursor:pointer}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--green);border:2px solid var(--bg0);box-shadow:0 0 8px var(--green-glow);cursor:pointer;transition:transform 0.15s}
-input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
+input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2)}
 input[type=range].sl-amber::-webkit-slider-thumb{background:var(--amber);box-shadow:0 0 8px rgba(255,170,0,0.35)}
 input[type=range].sl-blue::-webkit-slider-thumb{background:var(--blue);box-shadow:0 0 8px rgba(77,184,255,0.35)}
 input[type=range].sl-purple::-webkit-slider-thumb{background:var(--purple);box-shadow:0 0 8px rgba(192,132,255,0.35)}
 input[type=range].sl-cyan::-webkit-slider-thumb{background:var(--cyan);box-shadow:0 0 8px rgba(0,229,255,0.35)}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--green);border:2px solid var(--bg0);box-shadow:0 0 8px var(--green-glow);cursor:pointer}
 .slider-ticks{display:flex;justify-content:space-between;font-size:8px;color:var(--text3);letter-spacing:0.5px;margin-top:2px}
 
 /* ── TOGGLE ── */
@@ -149,11 +147,11 @@ input[type=range].sl-cyan::-webkit-slider-thumb{background:var(--cyan);box-shado
 .tog-state.touched{color:var(--purple);text-shadow:0 0 6px var(--purple)}
 
 /* ── INPUTS ── */
-.cfg-input{width:100%;padding:7px 10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--font-mono);font-size:12px;border-radius:3px;outline:none;transition:border-color 0.2s;margin-top:4px}
+.cfg-input{width:100%;padding:7px 10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--font-mono);font-size:12px;border-radius:3px;outline:none;transition:border-color 0.2s}
 .cfg-input:focus{border-color:var(--amber)}
-.cfg-select{width:100%;padding:7px 10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--font-mono);font-size:11px;border-radius:3px;outline:none;cursor:pointer;margin-top:4px;transition:border-color 0.2s}
+.cfg-select{width:100%;padding:7px 10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--font-mono);font-size:11px;border-radius:3px;outline:none;cursor:pointer;margin-top:4px;transition:border-color 0.2s;-webkit-appearance:none;appearance:none;padding-right:30px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%236a8aa5' d='M4 6l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;background-size:16px}
 .cfg-select:focus{border-color:var(--cyan)}
-option{background:var(--bg2)}
+option{background:var(--bg2);color:var(--text)}
 
 /* ── SEND BTN ── */
 .send-btn{width:100%;margin-top:16px;padding:10px;background:var(--green-dim);border:1px solid rgba(0,255,136,0.35);color:var(--green);font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all 0.2s;position:relative;overflow:hidden}
@@ -165,11 +163,11 @@ option{background:var(--bg2)}
 
 /* ── INPUT PIN LIVE READ ── */
 .live-read-box{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:14px;margin-bottom:4px}
-.live-read-row{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
+.live-read-row{display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap}
 .live-val-big{font-family:var(--font-ui);font-size:36px;font-weight:700;letter-spacing:1px;transition:color 0.3s}
 .live-val-unit{font-size:14px;color:var(--text3)}
 .live-val-raw{font-size:10px;color:var(--text3);letter-spacing:1px;margin-left:auto}
-.live-status-row{display:flex;align-items:center;gap:8px;margin-top:4px}
+.live-status-row{display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap}
 .live-indicator{width:8px;height:8px;border-radius:50%;background:var(--text3);transition:all 0.3s;flex-shrink:0}
 .live-indicator.on{background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 0.8s ease-in-out infinite}
 .live-indicator.poll{background:var(--cyan);box-shadow:0 0 6px var(--cyan);animation:blink 0.5s ease-in-out infinite}
@@ -177,9 +175,9 @@ option{background:var(--bg2)}
 .live-last-update{font-size:9px;color:var(--text3);margin-left:auto;letter-spacing:1px}
 
 /* ── POLLING CONFIG ── */
-.poll-cfg{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.poll-cfg{display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap}
 .poll-cfg label{font-size:9px;color:var(--text3);letter-spacing:1px;white-space:nowrap}
-.poll-cfg input{flex:1;padding:5px 8px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--font-mono);font-size:11px;border-radius:3px;outline:none;min-width:0}
+.poll-cfg input{flex:1;min-width:60px;padding:5px 8px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--font-mono);font-size:11px;border-radius:3px;outline:none}
 .poll-cfg input:focus{border-color:var(--cyan)}
 .poll-toggle-btn{padding:5px 10px;background:var(--bg2);border:1px solid var(--border);color:var(--text2);font-family:var(--font-mono);font-size:9px;letter-spacing:1px;cursor:pointer;border-radius:3px;transition:all 0.18s;white-space:nowrap;text-transform:uppercase}
 .poll-toggle-btn:hover{border-color:var(--border2);color:var(--text)}
@@ -193,25 +191,25 @@ option{background:var(--bg2)}
 
 /* ── OSCILLOSCOPE ── */
 .osc-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-top:4px}
-.osc-header{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-bottom:1px solid var(--border)}
+.osc-header{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px}
 .osc-title{font-size:9px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;display:flex;align-items:center;gap:6px}
 .osc-title::before{content:'';width:2px;height:10px;background:var(--cyan);border-radius:1px;box-shadow:0 0 4px var(--cyan)}
-.osc-controls{display:flex;align-items:center;gap:6px}
-.osc-ctrl-lbl{font-size:8px;color:var(--text3);letter-spacing:1px}
+.osc-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.osc-ctrl-lbl{font-size:8px;color:var(--text3);letter-spacing:1px;white-space:nowrap}
 .osc-ctrl-select{padding:3px 6px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-family:var(--font-mono);font-size:9px;border-radius:2px;outline:none;cursor:pointer}
 canvas.osc-canvas{display:block;width:100%;height:120px}
 
 /* ── HISTORY LOG ── */
 .history-wrap{margin-top:4px}
-.history-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+.history-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;flex-wrap:wrap;gap:8px}
 .history-title{font-size:9px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;display:flex;align-items:center;gap:6px}
 .history-title::before{content:'';width:2px;height:10px;background:var(--amber);border-radius:1px;box-shadow:0 0 4px var(--amber)}
-.history-clear{padding:2px 8px;background:transparent;border:1px solid var(--border);color:var(--text3);font-family:var(--font-mono);font-size:8px;letter-spacing:1px;cursor:pointer;border-radius:2px;transition:all 0.15s}
+.history-clear{padding:2px 8px;background:transparent;border:1px solid var(--border);color:var(--text3);font-family:var(--font-mono);font-size:8px;letter-spacing:1px;cursor:pointer;border-radius:2px;transition:all 0.15s;white-space:nowrap}
 .history-clear:hover{border-color:var(--red);color:var(--red)}
 .history-list{max-height:140px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
 .history-list::-webkit-scrollbar{width:2px}
 .history-list::-webkit-scrollbar-thumb{background:var(--border2)}
-.history-entry{display:flex;align-items:center;gap:8px;padding:4px 6px;border-bottom:1px solid rgba(26,51,84,0.4);font-size:9px;transition:background 0.15s}
+.history-entry{display:flex;align-items:center;gap:8px;padding:4px 6px;border-bottom:1px solid rgba(26,51,84,0.4);font-size:9px;transition:background 0.15s;flex-wrap:wrap}
 .history-entry:hover{background:var(--bg3)}
 .history-entry:first-child{background:rgba(0,229,255,0.04)}
 .h-time{color:var(--text3);letter-spacing:0.5px;min-width:68px;flex-shrink:0}
@@ -221,16 +219,16 @@ canvas.osc-canvas{display:block;width:100%;height:120px}
 
 /* ── MONITOR ── */
 .monitor{grid-column:1;grid-row:2;background:var(--bg1);border-top:1px solid var(--border);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
-.monitor-head{flex-shrink:0;padding:7px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.monitor-head{flex-shrink:0;padding:7px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
 .monitor-title{display:flex;align-items:center;gap:7px;font-family:var(--font-ui);font-size:11px;letter-spacing:2px;color:var(--text3);text-transform:uppercase}
 .monitor-title::before{content:'';width:3px;height:12px;background:var(--amber);border-radius:2px;box-shadow:0 0 5px var(--amber)}
-.monitor-actions{display:flex;gap:6px}
-.mini-btn{padding:3px 9px;background:var(--bg2);border:1px solid var(--border);color:var(--text3);font-family:var(--font-mono);font-size:9px;letter-spacing:1px;cursor:pointer;border-radius:3px;text-transform:uppercase;transition:all 0.15s}
+.monitor-actions{display:flex;gap:6px;flex-wrap:wrap}
+.mini-btn{padding:3px 9px;background:var(--bg2);border:1px solid var(--border);color:var(--text3);font-family:var(--font-mono);font-size:9px;letter-spacing:1px;cursor:pointer;border-radius:3px;text-transform:uppercase;transition:all 0.15s;white-space:nowrap}
 .mini-btn:hover{border-color:var(--border2);color:var(--text2)}
 .monitor-body{flex:1;overflow-x:auto;overflow-y:hidden;padding:10px 14px;display:flex;align-items:stretch;gap:8px;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
 .monitor-body::-webkit-scrollbar{height:3px}
 .monitor-body::-webkit-scrollbar-thumb{background:var(--border2)}
-.mon-pin{flex-shrink:0;min-width:120px;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;gap:3px}
+.mon-pin{flex-shrink:0;min-width:120px;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;gap:3px;touch-action:manipulation}
 .mon-pin:hover{border-color:var(--border2);transform:translateY(-1px)}
 .mon-pin.active-sel{border-color:var(--green);background:var(--green-dim)}
 .mon-pin.mode-in{border-left:2px solid var(--cyan)}
@@ -257,12 +255,156 @@ canvas.osc-canvas{display:block;width:100%;height:120px}
 .toast.success{background:var(--green-dim);border:1px solid rgba(0,255,136,0.3);color:var(--green)}
 .toast.error{background:var(--red-dim);border:1px solid rgba(255,68,85,0.3);color:var(--red)}
 .toast.info{background:var(--cyan-dim);border:1px solid rgba(0,229,255,0.3);color:var(--cyan)}
+
+/* ── BACKEND CONFIG MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:none;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal-content{background:var(--bg1);border:1px solid var(--border2);border-radius:8px;padding:20px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto}
+.modal-title{font-family:var(--font-ui);font-size:18px;font-weight:700;color:var(--green);margin-bottom:16px;letter-spacing:2px}
+.modal-form{display:flex;flex-direction:column;gap:12px}
+.modal-form-group{display:flex;flex-direction:column;gap:6px}
+.modal-form-group label{font-size:11px;color:var(--text3);letter-spacing:2px;text-transform:uppercase}
+.modal-form-group input{padding:8px 12px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--font-mono);font-size:12px;border-radius:4px;outline:none}
+.modal-form-group input:focus{border-color:var(--cyan)}
+.modal-buttons{display:flex;gap:8px;margin-top:12px}
+.modal-btn{flex:1;padding:10px;border-radius:4px;border:none;font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all 0.2s}
+.modal-btn.primary{background:var(--green-dim);color:var(--green);border:1px solid rgba(0,255,136,0.35)}
+.modal-btn.primary:hover{background:rgba(0,255,136,0.13);box-shadow:0 0 12px var(--green-glow)}
+.modal-btn.secondary{background:var(--bg2);color:var(--text3);border:1px solid var(--border)}
+.modal-btn.secondary:hover{border-color:var(--border2);color:var(--text2)}
+
+/* ── MOBILE RESPONSIVE ── */
+@media(max-width:768px){
+  header{padding:8px 12px;height:auto;flex-direction:column;gap:8px}
+  .logo{gap:8px}
+  .logo-name{font-size:16px;letter-spacing:2px}
+  .logo-tag{font-size:7px}
+  .header-right{gap:6px;font-size:8px;width:100%;justify-content:space-around}
+  .pill{padding:3px 6px;font-size:8px;gap:4px}
+  .clock{min-width:auto;font-size:10px}
+  .config-btn{padding:3px 8px;font-size:8px}
+  
+  .app{grid-template-columns:1fr;grid-template-rows:1fr 150px 200px}
+  
+  .board-area{grid-column:1;grid-row:1;border-right:none;border-bottom:1px solid var(--border)}
+  .board-hint{font-size:7px;padding:2px 6px}
+  .zoom-btn{width:24px;height:24px;font-size:12px}
+  
+  .panel{grid-column:1;grid-row:2;border-left:none;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+  .ptab{font-size:8px;padding:8px 6px}
+  .panel-body{max-height:150px}
+  
+  .monitor{grid-column:1;grid-row:3;border-right:none;border-top:1px solid var(--border)}
+  .monitor-title{font-size:9px;gap:4px}
+  .monitor-title::before{height:8px}
+  .monitor-head{padding:6px 10px;gap:6px}
+  .mini-btn{padding:2px 6px;font-size:8px}
+  .mon-pin{min-width:90px;padding:6px 8px}
+  .mon-id{font-size:8px}
+  .mon-val{font-size:14px}
+  .mon-type{font-size:7px}
+  
+  .empty-hex{font-size:24px}
+  .empty-state p{font-size:10px}
+  
+  .cfg-gpio{font-size:18px}
+  .cfg-caps{font-size:8px}
+  .badge{font-size:8px;padding:2px 5px}
+  .slabel{font-size:8px;margin:10px 0 5px}
+  .warnbox{padding:6px 8px;font-size:9px}
+  
+  .mode-btn{padding:7px 4px;font-size:9px}
+  .sig-btn{padding:6px 4px;font-size:9px}
+  
+  .slider-val{font-size:22px}
+  .slider-unit{font-size:10px}
+  .slider-sub{font-size:8px}
+  
+  .live-val-big{font-size:28px}
+  .live-val-unit{font-size:12px}
+  .live-val-raw{font-size:8px}
+  .live-label{font-size:8px}
+  
+  .poll-cfg{gap:6px}
+  .poll-cfg label{font-size:8px}
+  .poll-cfg input{font-size:10px;padding:4px 6px}
+  .poll-toggle-btn{padding:4px 8px;font-size:8px}
+  
+  .stats-row{gap:4px}
+  .stat-val{font-size:12px}
+  .stat-lbl{font-size:7px}
+  
+  .osc-header{padding:5px 8px;gap:4px;font-size:8px}
+  .osc-controls{gap:4px}
+  .osc-ctrl-lbl{font-size:7px}
+  .osc-ctrl-select{padding:2px 4px;font-size:8px}
+  
+  .history-header{margin-bottom:5px;gap:4px}
+  .history-title{font-size:8px}
+  .history-clear{padding:1px 6px;font-size:7px}
+  .h-time{font-size:8px;min-width:60px}
+  .h-val{font-size:11px}
+  .h-raw{font-size:7px}
+  
+  .tooltip{padding:6px 10px}
+  .tt-pin{font-size:13px}
+  .tt-caps{font-size:8px}
+  
+  .send-btn{margin-top:12px;padding:8px}
+  .modal-content{width:95%}
+}
+
+@media(max-width:480px){
+  .logo-name{font-size:14px;letter-spacing:1px}
+  .header-right{font-size:7px}
+  .pill{padding:2px 4px;font-size:7px;gap:3px}
+  
+  .panel-body{max-height:120px}
+  .ptab{padding:6px 4px;font-size:7px}
+  
+  .cfg-gpio{font-size:16px}
+  .badge-row{gap:3px}
+  .badge{font-size:7px;padding:2px 4px}
+  
+  .mode-row{gap:4px}
+  .sig-grid{gap:3px}
+  
+  .slider-val{font-size:20px}
+  .live-val-big{font-size:24px}
+  
+  .stats-row{grid-template-columns:1fr;gap:3px}
+  .stat-val{font-size:11px}
+  
+  .modal-content{padding:16px}
+  .modal-form-group input{padding:6px 10px;font-size:11px}
+}
 </style>
 </head>
 <body>
 
 <div class="tooltip" id="tooltip"><div class="tt-pin" id="tt-pin"></div><div class="tt-caps" id="tt-caps"></div></div>
 <div class="toast" id="toast"></div>
+
+<!-- BACKEND CONFIG MODAL -->
+<div class="modal-overlay" id="backendModal">
+  <div class="modal-content">
+    <div class="modal-title">Backend Configuration</div>
+    <div class="modal-form">
+      <div class="modal-form-group">
+        <label for="backendUrl">Backend URL (without https://)</label>
+        <input type="text" id="backendUrl" placeholder="esp32simulator-production-18f3.up.railway.app" value="esp32simulator-production-18f3.up.railway.app"/>
+      </div>
+      <div style="font-size:10px;color:var(--text3);line-height:1.6;margin:8px 0;">
+        ℹ️ Update this when the backend is redeployed to a new URL.<br/>
+        Current: <span id="currentBackendUrl" style="color:var(--cyan);font-family:var(--font-mono);">esp32simulator-production-18f3.up.railway.app</span>
+      </div>
+    </div>
+    <div class="modal-buttons">
+      <button class="modal-btn primary" onclick="saveBackendConfig()">✓ Save</button>
+      <button class="modal-btn secondary" onclick="closeBackendModal()">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <!-- HEADER -->
 <header>
@@ -271,10 +413,11 @@ canvas.osc-canvas{display:block;width:100%;height:120px}
     <div><div class="logo-name">ESP32 · SIM</div><div class="logo-tag">Pin Signal Simulator — DevKit V1</div></div>
   </div>
   <div class="header-right">
-    <div class="hw-pill"><div class="hw-indicator disconnected" id="hwStatus"></div><span id="hwLabel">HW: OFFLINE</span></div>
-    <div class="poll-pill"><div class="poll-dot" id="pollDot"></div><span id="pollLabel">POLL: OFF</span></div>
-    <div class="ws-pill"><div class="ws-dot" id="wsDot"></div><span id="wsLabel">WS: OFF</span></div>
+    <div class="pill"><div class="pill-dot hw-indicator disconnected" id="hwStatus"></div><span id="hwLabel">HW: OFFLINE</span></div>
+    <div class="pill"><div class="pill-dot poll-dot" id="pollDot"></div><span id="pollLabel">POLL: OFF</span></div>
+    <div class="pill"><div class="pill-dot ws-dot" id="wsDot"></div><span id="wsLabel">WS: OFF</span></div>
     <div class="clock" id="clock">--:--:--.---</div>
+    <button class="config-btn" onclick="openBackendModal()" title="Configure backend URL">⚙️ Config</button>
   </div>
 </header>
 
@@ -286,7 +429,7 @@ canvas.osc-canvas{display:block;width:100%;height:120px}
     <div class="zoom-controls">
       <button class="zoom-btn" onclick="zoom(0.15)" title="Zoom In">+</button>
       <button class="zoom-btn" onclick="zoom(-0.15)" title="Zoom Out">−</button>
-      <button class="zoom-btn" onclick="resetView()" style="font-size:10px;">FIT</button>
+      <button class="zoom-btn" onclick="resetView()" title="Fit View" style="font-size:10px;">FIT</button>
     </div>
     <div class="board-hint">scroll to zoom · drag to pan · click a pin</div>
     <div class="board-canvas" id="boardCanvas">
@@ -362,12 +505,6 @@ canvas.osc-canvas{display:block;width:100%;height:120px}
                   <option value="30">30s</option>
                   <option value="60">60s</option>
                 </select>
-                <span class="osc-ctrl-lbl">Trigger</span>
-                <select class="osc-ctrl-select" id="oscTrigger">
-                  <option value="free">Free</option>
-                  <option value="rise">Rise</option>
-                  <option value="fall">Fall</option>
-                </select>
               </div>
             </div>
             <canvas class="osc-canvas" id="oscCanvas" height="120"></canvas>
@@ -428,6 +565,54 @@ canvas.osc-canvas{display:block;width:100%;height:120px}
 
 <script>
 // ═══════════════════════════════════════════════
+// BACKEND CONFIGURATION
+// ═══════════════════════════════════════════════
+const BACKEND_STORAGE_KEY = 'esp32_backend_url';
+const DEFAULT_BACKEND = 'esp32simulator-production-18f3.up.railway.app';
+
+function getBackendUrl() {
+  return localStorage.getItem(BACKEND_STORAGE_KEY) || DEFAULT_BACKEND;
+}
+
+function setBackendUrl(url) {
+  localStorage.setItem(BACKEND_STORAGE_KEY, url.trim());
+  document.getElementById('currentBackendUrl').textContent = url.trim();
+}
+
+function buildBackendUrl(endpoint) {
+  const base = getBackendUrl();
+  return `https://${base}${endpoint}`;
+}
+
+function openBackendModal() {
+  document.getElementById('backendUrl').value = getBackendUrl();
+  document.getElementById('backendModal').classList.add('show');
+}
+
+function closeBackendModal() {
+  document.getElementById('backendModal').classList.remove('show');
+}
+
+function saveBackendConfig() {
+  const url = document.getElementById('backendUrl').value.trim();
+  if (!url) {
+    showToast('URL cannot be empty', 'error');
+    return;
+  }
+  setBackendUrl(url);
+  showToast('Backend URL updated ✓', 'success');
+  closeBackendModal();
+}
+
+// Initialize backend URL display
+document.getElementById('currentBackendUrl').textContent = getBackendUrl();
+
+// Close modal when clicking overlay
+document.getElementById('backendModal').addEventListener('click', function(e) {
+  if (e.target === this) closeBackendModal();
+});
+
+// ═══════════════════════════════════════════════
 // PIN DEFINITIONS
 // ═══════════════════════════════════════════════
 const LX=100,RX=580,YS=80,YE=460,N=19;
@@ -483,13 +668,11 @@ PINS.forEach(p=>{
     mode:null,signalType:null,value:0,
     pullMode:'none',freq:1000,
     digitalState:false,touchState:false,
-    // input live data
     liveValue:null,lastPollTime:null,
     pollInterval:500,polling:false,
   };
 });
 
-// Per-pin signal history: { timestamp, value, raw, unit }
 const signalHistory={};
 PINS.forEach(p=>{ signalHistory[p.id]=[]; });
 
@@ -497,7 +680,7 @@ let selectedPin=null,ws=null;
 let lastPin=null,lastMode=null,lastSig=null;
 let activeTab='config';
 let oscWindowSec=10,logMaxSize=100;
-let pollTimers={};  // pinId → setInterval handle
+let pollTimers={};
 
 // ═══════════════════════════════════════════════
 // PAN / ZOOM
@@ -519,8 +702,11 @@ function resetView(){
 }
 BA.addEventListener('wheel',e=>{e.preventDefault();const r=BA.getBoundingClientRect();zoom(e.deltaY<0?0.1:-0.1,e.clientX-r.left,e.clientY-r.top);},{passive:false});
 BA.addEventListener('mousedown',e=>{if(e.target.closest('.zoom-controls'))return;dragging=true;dsx=e.clientX;dsy=e.clientY;psx=panX;psy=panY;});
+BA.addEventListener('touchstart',e=>{if(e.target.closest('.zoom-controls'))return;if(e.touches.length===1){dragging=true;dsx=e.touches[0].clientX;dsy=e.touches[0].clientY;psx=panX;psy=panY;}},{passive:true});
 window.addEventListener('mousemove',e=>{if(!dragging)return;panX=psx+(e.clientX-dsx);panY=psy+(e.clientY-dsy);applyT();});
+window.addEventListener('touchmove',e=>{if(!dragging||e.touches.length!==1)return;panX=psx+(e.touches[0].clientX-dsx);panY=psy+(e.touches[0].clientY-dsy);applyT();},{passive:true});
 window.addEventListener('mouseup',()=>{dragging=false;});
+window.addEventListener('touchend',()=>{dragging=false;});
 
 // ═══════════════════════════════════════════════
 // PIN COLORS
@@ -548,38 +734,32 @@ function renderBoard(){
     const c=pcolor(pin),sel=selectedPin&&selectedPin.id===pin.id,isLeft=pin.x<300;
     const g=document.createElementNS('http://www.w3.org/2000/svg','g');
     g.style.cursor='pointer';
-    // trace
     const tlen=20,tx=isLeft?pin.x-tlen:pin.x+tlen;
     const tr=document.createElementNS('http://www.w3.org/2000/svg','line');
     tr.setAttribute('x1',pin.x);tr.setAttribute('y1',pin.y);tr.setAttribute('x2',tx);tr.setAttribute('y2',pin.y);
     tr.setAttribute('stroke',c);tr.setAttribute('stroke-width','1.2');tr.setAttribute('opacity','0.4');
     g.appendChild(tr);
-    // pad
     const pw=10,ph=8,padX=isLeft?pin.x-tlen-pw:pin.x+tlen;
     const pad=document.createElementNS('http://www.w3.org/2000/svg','rect');
     pad.setAttribute('x',padX);pad.setAttribute('y',pin.y-ph/2);pad.setAttribute('width',pw);pad.setAttribute('height',ph);
     pad.setAttribute('fill','#0a1824');pad.setAttribute('stroke',c);pad.setAttribute('stroke-width','0.7');pad.setAttribute('rx','1');
     g.appendChild(pad);
-    // dot
     const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
     dot.setAttribute('cx',pin.x);dot.setAttribute('cy',pin.y);dot.setAttribute('r',sel?7:5);
     dot.setAttribute('fill',c);if(pin.blocked)dot.setAttribute('opacity','0.5');
     if(sel||pinState[pin.id].mode)dot.setAttribute('filter','url(#pg)');
     if(sel){dot.setAttribute('stroke','#fff');dot.setAttribute('stroke-width','1.5');}
     g.appendChild(dot);
-    // inner dot
     const inn=document.createElementNS('http://www.w3.org/2000/svg','circle');
     inn.setAttribute('cx',pin.x);inn.setAttribute('cy',pin.y);inn.setAttribute('r','2');
     inn.setAttribute('fill',sel?'#fff':'#060a0f');inn.setAttribute('opacity','0.7');
     g.appendChild(inn);
-    // polling indicator ring
     if(pinState[pin.id].polling){
       const ring=document.createElementNS('http://www.w3.org/2000/svg','circle');
       ring.setAttribute('cx',pin.x);ring.setAttribute('cy',pin.y);ring.setAttribute('r','9');
       ring.setAttribute('fill','none');ring.setAttribute('stroke','#00e5ff');ring.setAttribute('stroke-width','1');ring.setAttribute('opacity','0.5');
       g.appendChild(ring);
     }
-    // label
     const lx=isLeft?(pin.x-tlen-pw-5):(pin.x+tlen+pw+5);
     const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
     txt.setAttribute('x',lx);txt.setAttribute('y',pin.y+4);
@@ -590,7 +770,6 @@ function renderBoard(){
     if(pin.blocked)txt.setAttribute('opacity','0.5');
     txt.textContent=pin.label;
     g.appendChild(txt);
-    // hit area
     const hit=document.createElementNS('http://www.w3.org/2000/svg','circle');
     hit.setAttribute('cx',pin.x);hit.setAttribute('cy',pin.y);hit.setAttribute('r','13');hit.setAttribute('fill','transparent');
     g.appendChild(hit);
@@ -688,7 +867,6 @@ function renderConfig(){
         </div>`;
   }
 
-  // ── OUTPUT controls (user drives the signal) ──
   let ctrlH='';
   if(st.mode==='output'&&st.signalType){
     if(st.signalType==='DAC'){
@@ -714,10 +892,8 @@ function renderConfig(){
     ctrlH+=`<button class="send-btn" id="sendBtn" onclick="sendPin()">⟶ &nbsp; SEND TO BACKEND</button>`;
   }
 
-  // ── INPUT controls (backend drives the signal) ──
   let inputCtrlH='';
   if(st.mode==='input'&&st.signalType){
-    // Poll interval config
     inputCtrlH=`<div class="slabel">// POLL CONFIGURATION</div>
       <div class="poll-cfg">
         <label>Interval</label>
@@ -732,7 +908,6 @@ function renderConfig(){
         <option value="down" ${st.pullMode==='down'?'selected':''}>Pull-Down → GND</option>
       </select>`;
 
-    // Live read box — shows current value from backend
     const hasLive=st.liveValue!==null;
     let liveDisp='—',liveUnit='',liveRaw='',liveColor='var(--text2)';
     if(hasLive){
@@ -804,7 +979,7 @@ function togglePoll(){
   const st=pinState[selectedPin.id];
   if(st.polling)stopPoll(selectedPin.id);
   else startPoll(selectedPin.id);
-  lastMode=null;// force re-render
+  lastMode=null;
   renderConfig();
   renderBoard();
 }
@@ -814,7 +989,6 @@ function startPoll(pinId){
   const st=pinState[pinId];
   if(st.polling)return;
   st.polling=true;
-  // immediate first fetch
   fetchPinValue(pinId);
   pollTimers[pinId]=setInterval(()=>fetchPinValue(pinId),st.pollInterval);
   updateGlobalPollIndicator();
@@ -845,32 +1019,26 @@ function updateGlobalPollIndicator(){
 async function fetchPinValue(pinId){
   const st=pinState[pinId];
   try{
-    const res=await fetch(`https://esp32simulator-production-18f3.up.railway.app/api/pin/${pinId}`);
+    const res=await fetch(buildBackendUrl(`/api/pin/${pinId}`));
     if(!res.ok)throw new Error('not ok');
     const data=await res.json();
-    // backend returns { gpio, value, signal_type, ... }
     const newVal=typeof data.value==='number'?data.value:st.liveValue??0;
     st.liveValue=newVal;
     st.lastPollTime=Date.now();
-    // push to history
     pushHistory(pinId,newVal,st.signalType);
-    // update monitor
     updateMonitor();
-    // if this pin is selected, update live box in place (no full re-render)
     if(selectedPin&&selectedPin.id===pinId&&activeTab==='config'){
       updateLiveBox(pinId);
     }
     if(activeTab==='scope'&&selectedPin&&selectedPin.id===pinId)drawOscilloscope();
     if(activeTab==='log'&&selectedPin&&selectedPin.id===pinId)renderLog();
   } catch(e){
-    // backend offline — show last value as stale
     if(selectedPin&&selectedPin.id===pinId&&activeTab==='config'){
       updateLiveBox(pinId,true);
     }
   }
 }
 
-// Update only the live box DOM without re-rendering full config
 function updateLiveBox(pinId,stale=false){
   const st=pinState[pinId];
   const box=document.querySelector('.live-read-box');
@@ -926,16 +1094,13 @@ function drawOscilloscope(){
   const W=canvas.offsetWidth||300,H=120;
   canvas.width=W;canvas.height=H;
 
-  // background
   ctx.fillStyle='#0a1420';
   ctx.fillRect(0,0,W,H);
 
-  // grid lines
   ctx.strokeStyle='rgba(26,51,84,0.8)';ctx.lineWidth=0.5;
   for(let i=0;i<=4;i++){const y=i*H/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
   for(let i=0;i<=10;i++){const x=i*W/10;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
 
-  // axis labels
   ctx.fillStyle='#3a5a75';ctx.font='8px JetBrains Mono,monospace';
   ctx.fillText('3.3V',3,10);ctx.fillText('0V',3,H-3);ctx.fillText('1.65V',3,H/2+4);
 
@@ -949,7 +1114,6 @@ function drawOscilloscope(){
   if(hist.length<2){
     ctx.fillStyle='#3a5a75';ctx.font='10px JetBrains Mono,monospace';ctx.textAlign='center';
     ctx.fillText(hist.length===0?'No data — start polling to see waveform':'Collecting data...',W/2,H/2);
-    // time axis
     ctx.textAlign='left';return;
   }
 
@@ -963,7 +1127,6 @@ function drawOscilloscope(){
   const lineColor=st.signalType==='ADC'?'#4db8ff':st.signalType==='DIGITAL'?'#00ff88':st.signalType==='TOUCH'?'#c084ff':'#ffaa00';
   const glowColor=lineColor;
 
-  // draw waveform
   ctx.shadowColor=glowColor;ctx.shadowBlur=4;
   ctx.strokeStyle=lineColor;ctx.lineWidth=1.5;ctx.lineJoin='round';
   ctx.beginPath();
@@ -977,7 +1140,6 @@ function drawOscilloscope(){
     if(first){ctx.moveTo(x,y);first=false;}
     else{
       if(isDigital){
-        // step function for digital
         const prev=windowData[i+1];
         if(prev){
           const prevAge=now-prev.ts;
@@ -990,7 +1152,6 @@ function drawOscilloscope(){
   ctx.stroke();
   ctx.shadowBlur=0;
 
-  // fill under curve
   if(!isDigital){
     ctx.lineTo(W,H);ctx.lineTo(W-(((now-windowData[0].ts)/windowMs)*W),H);
     ctx.closePath();
@@ -998,13 +1159,11 @@ function drawOscilloscope(){
     ctx.fill();
   }
 
-  // time axis labels
   ctx.shadowBlur=0;ctx.fillStyle='#3a5a75';ctx.font='7px JetBrains Mono,monospace';ctx.textAlign='center';
   ctx.fillText('now',W-2,H-2);
   ctx.fillText(`-${oscWindowSec}s`,4,H-2);
   ctx.fillText(`-${Math.round(oscWindowSec/2)}s`,W/2,H-2);
 
-  // update stats
   updateStats(windowData,st.signalType);
 }
 
@@ -1026,7 +1185,6 @@ function updateStats(data,signalType){
   if(e('statPP'))e('statPP').textContent=fmt(mx-mn);
   if(e('statSamples'))e('statSamples').textContent=data.length;
 
-  // estimate frequency from zero crossings on ADC/PWM
   if(signalType==='ADC'||signalType==='PWM_READ'){
     const mid=(mn+mx)/2;
     let crossings=0;
@@ -1078,7 +1236,6 @@ function renderLog(){
 function refreshScopeAndLog(){
   if(activeTab==='scope')drawOscilloscope();
   if(activeTab==='log')renderLog();
-  // also refresh scope/log visibility
   const pin=selectedPin;
   const isInput=pin&&pinState[pin.id]?.mode==='input';
   const scopeEmpty=document.getElementById('scopeEmpty');
@@ -1141,7 +1298,7 @@ function sendPin(){
   const payload={gpio:pin.id,label:pin.label,mode:st.mode,signal_type:st.signalType,
     value:st.value,pull_mode:st.pullMode,frequency:st.freq,
     digital_state:st.digitalState,touch_state:st.touchState,timestamp:Date.now()};
-  fetch('https://esp32simulator-production-18f3.up.railway.app/api/pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+  fetch(buildBackendUrl('/api/pin'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     .then(()=>showToast('Output sent ✓','success'))
     .catch(()=>showToast('Backend unreachable','error'));
   const btn=document.getElementById('sendBtn');
@@ -1168,16 +1325,16 @@ function resetAll(){
     signalHistory[p.id]=[];
   });
   selectedPin=null;lastPin=null;lastMode=null;lastSig=null;
-  fetch('https://esp32simulator-production.up.railway.app/api/pins',{method:'DELETE'}).catch(()=>{});
+  fetch(buildBackendUrl('/api/pins'),{method:'DELETE'}).catch(()=>{});
   renderBoard();renderConfig();updateMonitor();refreshScopeAndLog();
   showToast('All pins reset','success');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════
 // HARDWARE STATUS CHECK
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════
 function checkHardwareStatus(){
-  fetch('https://esp32simulator-production.up.railway.app/api/hardware/status')
+  fetch(buildBackendUrl('/api/hardware/status'))
     .then(r=>r.json())
     .then(data=>{
       const indicator=document.getElementById('hwStatus');
@@ -1200,15 +1357,16 @@ function checkHardwareStatus(){
 // ═══════════════════════════════════════════════
 function connectWS(){
   const dot=document.getElementById('wsDot'),lbl=document.getElementById('wsLabel');
+  const backendUrl=getBackendUrl().replace('https://','').replace('http://','');
+  const wsUrl=`wss://${backendUrl}/ws`;
   try{
-    ws=new WebSocket('ws://esp32simulator-production.up.railway.app/ws');
+    ws=new WebSocket(wsUrl);
     ws.onopen=()=>{dot.className='ws-dot on';lbl.textContent='WS: ON';};
     ws.onclose=()=>{dot.className='ws-dot';lbl.textContent='WS: OFF';setTimeout(connectWS,5000);};
     ws.onerror=()=>{dot.className='ws-dot';lbl.textContent='WS: ERR';};
     ws.onmessage=e=>{
       try{
         const msg=JSON.parse(e.data);
-        // Backend can also push input values via WS if it wants
         if(msg.type==='pin_state'&&msg.data){
           const d=msg.data;
           if(pinState[d.gpio]){
@@ -1257,7 +1415,6 @@ setInterval(()=>{
   if(p)p.setAttribute('fill','#005500');
   if(a){a.setAttribute('fill','#00cc00');setTimeout(()=>a&&a.setAttribute('fill','#001800'),60);}
 },2200);
-// redraw oscilloscope every 200ms if visible
 setInterval(()=>{
   if(activeTab==='scope'&&selectedPin)drawOscilloscope();
 },200);
