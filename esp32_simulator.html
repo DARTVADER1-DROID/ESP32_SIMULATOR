@@ -581,12 +581,20 @@ function setBackendUrl(url) {
 
 function buildBackendUrl(endpoint) {
   const base = getBackendUrl();
+  // Always use HTTPS for Railway
   return `https://${base}${endpoint}`;
+}
+
+function buildWSUrl() {
+  const base = getBackendUrl();
+  // Always use WSS for Railway secure WebSocket
+  return `wss://${base}/ws`;
 }
 
 function openBackendModal() {
   document.getElementById('backendUrl').value = getBackendUrl();
   document.getElementById('backendModal').classList.add('show');
+  console.log('Backend config modal opened. Current URL:', getBackendUrl());
 }
 
 function closeBackendModal() {
@@ -599,8 +607,17 @@ function saveBackendConfig() {
     showToast('URL cannot be empty', 'error');
     return;
   }
-  setBackendUrl(url);
-  showToast('Backend URL updated ✓', 'success');
+  // Remove https:// or http:// if user included it
+  const cleanUrl = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  setBackendUrl(cleanUrl);
+  console.log('Backend URL updated to:', cleanUrl);
+  showToast('Backend URL updated ✓\nPlease refresh to connect', 'success');
+  // Reconnect WebSocket after a short delay
+  setTimeout(() => {
+    if (ws) ws.close();
+    connectWS();
+    checkHardwareStatus();
+  }, 500);
   closeBackendModal();
 }
 
@@ -1019,8 +1036,22 @@ function updateGlobalPollIndicator(){
 async function fetchPinValue(pinId){
   const st=pinState[pinId];
   try{
-    const res=await fetch(buildBackendUrl(`/api/pin/${pinId}`));
-    if(!res.ok)throw new Error('not ok');
+    const url = buildBackendUrl(`/api/pin/${pinId}`);
+    console.log(`Fetching GPIO ${pinId} from:`, url);
+    const res=await fetch(url, {
+      method: 'GET',
+      mode: 'cors',
+      credentials: 'omit',
+      headers: {
+        'Accept': 'application/json',
+      }
+    });
+    if(!res.ok){
+      console.error(`Poll failed for GPIO ${pinId}: HTTP ${res.status} ${res.statusText}`);
+      const errText = await res.text();
+      console.error('Response:', errText);
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
     const data=await res.json();
     const newVal=typeof data.value==='number'?data.value:st.liveValue??0;
     st.liveValue=newVal;
@@ -1033,6 +1064,7 @@ async function fetchPinValue(pinId){
     if(activeTab==='scope'&&selectedPin&&selectedPin.id===pinId)drawOscilloscope();
     if(activeTab==='log'&&selectedPin&&selectedPin.id===pinId)renderLog();
   } catch(e){
+    console.error(`fetchPinValue error for GPIO ${pinId}:`, e.message, e);
     if(selectedPin&&selectedPin.id===pinId&&activeTab==='config'){
       updateLiveBox(pinId,true);
     }
@@ -1298,9 +1330,28 @@ function sendPin(){
   const payload={gpio:pin.id,label:pin.label,mode:st.mode,signal_type:st.signalType,
     value:st.value,pull_mode:st.pullMode,frequency:st.freq,
     digital_state:st.digitalState,touch_state:st.touchState,timestamp:Date.now()};
-  fetch(buildBackendUrl('/api/pin'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+  const url = buildBackendUrl('/api/pin');
+  console.log('Sending pin config to:', url, 'Payload:', payload);
+  fetch(url,{
+    method:'POST',
+    mode:'cors',
+    credentials:'omit',
+    headers:{'Content-Type':'application/json','Accept':'application/json'},
+    body:JSON.stringify(payload)
+  })
+    .then(res=>{
+      if(!res.ok){
+        console.error(`POST failed: HTTP ${res.status} ${res.statusText}`);
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      console.log('✓ Pin config sent successfully');
+      return res.json();
+    })
     .then(()=>showToast('Output sent ✓','success'))
-    .catch(()=>showToast('Backend unreachable','error'));
+    .catch(err=>{
+      console.error('Send error:',err.message, err);
+      showToast('Backend unreachable\nCheck console for details','error');
+    });
   const btn=document.getElementById('sendBtn');
   if(btn){btn.textContent='✓  SENT';btn.classList.add('sent');setTimeout(()=>{btn.textContent='⟶  SEND TO BACKEND';btn.classList.remove('sent');},1800);}
 }
@@ -1325,7 +1376,14 @@ function resetAll(){
     signalHistory[p.id]=[];
   });
   selectedPin=null;lastPin=null;lastMode=null;lastSig=null;
-  fetch(buildBackendUrl('/api/pins'),{method:'DELETE'}).catch(()=>{});
+  const url = buildBackendUrl('/api/pins');
+  console.log('Sending reset to:', url);
+  fetch(url,{method:'DELETE',mode:'cors',credentials:'omit',headers:{'Accept':'application/json'}})
+    .then(r=>{
+      if(!r.ok) console.error(`Reset failed: HTTP ${r.status}`);
+      else console.log('✓ Backend reset sent');
+    })
+    .catch(err=>console.error('Reset error:',err.message));
   renderBoard();renderConfig();updateMonitor();refreshScopeAndLog();
   showToast('All pins reset','success');
 }
@@ -1334,9 +1392,18 @@ function resetAll(){
 // HARDWARE STATUS CHECK
 // ═══════════════════════════════════════════════
 function checkHardwareStatus(){
-  fetch(buildBackendUrl('/api/hardware/status'))
-    .then(r=>r.json())
+  const url = buildBackendUrl('/api/hardware/status');
+  console.log('Checking hardware status:', url);
+  fetch(url,{mode:'cors',credentials:'omit',headers:{'Accept':'application/json'}})
+    .then(r=>{
+      if(!r.ok){
+        console.error(`Status check failed: HTTP ${r.status}`);
+        throw new Error(`HTTP ${r.status}`);
+      }
+      return r.json();
+    })
     .then(data=>{
+      console.log('✓ Hardware status received:', data);
       const indicator=document.getElementById('hwStatus');
       const label=document.getElementById('hwLabel');
       if(!indicator||!label)return;
@@ -1344,7 +1411,8 @@ function checkHardwareStatus(){
       indicator.className='hw-indicator '+(connected?'connected':'disconnected');
       label.textContent='HW: '+(connected?'ONLINE':'OFFLINE');
     })
-    .catch(()=>{
+    .catch(err=>{
+      console.error('HW status check failed:',err.message, err);
       const indicator=document.getElementById('hwStatus');
       const label=document.getElementById('hwLabel');
       if(indicator)indicator.className='hw-indicator disconnected';
@@ -1357,13 +1425,26 @@ function checkHardwareStatus(){
 // ═══════════════════════════════════════════════
 function connectWS(){
   const dot=document.getElementById('wsDot'),lbl=document.getElementById('wsLabel');
-  const backendUrl=getBackendUrl().replace('https://','').replace('http://','');
-  const wsUrl=`wss://${backendUrl}/ws`;
+  const wsUrl=buildWSUrl();
+  console.log('Attempting WebSocket connection to:', wsUrl);
   try{
     ws=new WebSocket(wsUrl);
-    ws.onopen=()=>{dot.className='ws-dot on';lbl.textContent='WS: ON';};
-    ws.onclose=()=>{dot.className='ws-dot';lbl.textContent='WS: OFF';setTimeout(connectWS,5000);};
-    ws.onerror=()=>{dot.className='ws-dot';lbl.textContent='WS: ERR';};
+    ws.onopen=()=>{
+      console.log('✓ WebSocket connected');
+      dot.className='ws-dot on';
+      lbl.textContent='WS: ON';
+    };
+    ws.onclose=()=>{
+      console.log('WebSocket closed, reconnecting in 5s...');
+      dot.className='ws-dot';
+      lbl.textContent='WS: OFF';
+      setTimeout(connectWS,5000);
+    };
+    ws.onerror=(err)=>{
+      console.error('WebSocket error:', err);
+      dot.className='ws-dot';
+      lbl.textContent='WS: ERR';
+    };
     ws.onmessage=e=>{
       try{
         const msg=JSON.parse(e.data);
@@ -1389,9 +1470,12 @@ function connectWS(){
           if(indicator)indicator.className='hw-indicator '+(msg.esp32_connected?'connected':'disconnected');
           if(label)label.textContent='HW: '+(msg.esp32_connected?'ONLINE':'OFFLINE');
         }
-      }catch(err){}
+      }catch(err){console.error('Message parse error:', err);}
     };
-  }catch(e){document.getElementById('wsLabel').textContent='WS: N/A';}
+  }catch(e){
+    console.error('WebSocket creation error:', e);
+    document.getElementById('wsLabel').textContent='WS: N/A';
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -1422,15 +1506,31 @@ setInterval(()=>{
 // ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
+console.log('🚀 ESP32 Pin Simulator v2.0 Starting...');
+console.log('📡 Backend URL:', getBackendUrl());
+console.log('🔗 WebSocket URL:', buildWSUrl());
+
 resetView();
 renderBoard();
 renderConfig();
 updateMonitor();
 updateGlobalPollIndicator();
+
+// Add startup info box
+showToast('Connecting to backend...', 'info');
+
 connectWS();
 checkHardwareStatus();
 setInterval(checkHardwareStatus,2000);
 window.addEventListener('resize',resetView);
+
+// Debug info available in browser console
+console.log('✓ Simulator ready. Open browser DevTools (F12) to see detailed logs.');
+console.log('💡 If backend is unreachable, check:');
+console.log('   1. Backend URL in ⚙️ Config button');
+console.log('   2. CORS headers on backend');
+console.log('   3. Backend /api/hardware/status endpoint');
+
 </script>
 </body>
 </html>
