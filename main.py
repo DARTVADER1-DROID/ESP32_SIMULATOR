@@ -6,7 +6,7 @@ Connects to:
   - ESP32     : REST push (POST /api/esp32/reading) + output pull (GET /api/esp32/output/{id})
   - WebSocket : Real-time broadcast to all connected frontend clients
 """
-
+ 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -17,24 +17,24 @@ import asyncio
 import json
 import time
 import logging
-
+ 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
 log = logging.getLogger(__name__)
-
+ 
 app = FastAPI(title="ESP32 Pin Simulator", version="1.0.0", description="Backend for the ESP32 Pin Signal Simulator")
-
+ 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
+ 
+ 
 # ═══════════════════════════════════════════════════════════════
 # MODELS
 # ═══════════════════════════════════════════════════════════════
-
+ 
 class PinConfig(BaseModel):
     """Sent by the frontend when configuring a pin."""
     gpio: str
@@ -47,8 +47,8 @@ class PinConfig(BaseModel):
     digital_state: bool = False
     touch_state: bool = False
     timestamp: Optional[int] = None
-
-
+ 
+ 
 class ESP32Reading(BaseModel):
     """Sent by the ESP32 when it pushes a sensor reading."""
     gpio: str
@@ -57,81 +57,91 @@ class ESP32Reading(BaseModel):
     raw: Optional[float] = None          # raw ADC count, raw touch value, etc.
     unit: Optional[str] = None           # "V", "%", "raw", etc.
     timestamp: Optional[int] = None
-
-
+ 
+ 
 class HistoryEntry(BaseModel):
     ts: int
     value: float
     signal_type: str
-
-
+ 
+ 
 # ═══════════════════════════════════════════════════════════════
 # IN-MEMORY STORE
 # ═══════════════════════════════════════════════════════════════
-
+ 
 # Current pin configurations (set by frontend)
 pin_configs: Dict[str, PinConfig] = {}
-
+ 
 # Latest live readings for INPUT pins (set by ESP32)
 pin_readings: Dict[str, ESP32Reading] = {}
-
+ 
 # Signal history per pin (last 500 readings)
 pin_history: Dict[str, deque] = {}
-
+ 
+# Hardware connectivity tracking
+hardware_status = {
+    "esp32_connected": False,
+    "last_esp32_ping": None,
+    "esp32_timeout_seconds": 10,
+}
+ 
 MAX_HISTORY = 500
-
-
+ 
+ 
 def get_history(gpio: str) -> deque:
     if gpio not in pin_history:
         pin_history[gpio] = deque(maxlen=MAX_HISTORY)
     return pin_history[gpio]
-
-
+ 
+ 
 # ═══════════════════════════════════════════════════════════════
 # WEBSOCKET MANAGER
 # ═══════════════════════════════════════════════════════════════
-
+ 
 class ConnectionManager:
     def __init__(self):
         self.active: List[WebSocket] = []
-
+ 
     async def connect(self, ws: WebSocket):
         await ws.accept()
         self.active.append(ws)
         log.info(f"WS client connected — total: {len(self.active)}")
-
+ 
     def disconnect(self, ws: WebSocket):
         self.active.remove(ws)
         log.info(f"WS client disconnected — total: {len(self.active)}")
-
+ 
     async def broadcast(self, message: dict):
         dead = []
         for client in self.active:
             try:
                 await client.send_text(json.dumps(message))
-            except Exception:
+            except Exception as e:
+                log.debug(f"WS broadcast error: {e}")
                 dead.append(client)
         for d in dead:
             if d in self.active:
                 self.active.remove(d)
-
+                log.info(f"Removed dead WS client — total: {len(self.active)}")
+ 
     async def send_init(self, ws: WebSocket):
         """Send full current state to a newly connected client."""
         payload = {
             "type": "init",
             "configs": {k: v.dict() for k, v in pin_configs.items()},
             "readings": {k: v.dict() for k, v in pin_readings.items()},
+            "hardware_status": hardware_status,
         }
         await ws.send_text(json.dumps(payload))
-
-
+ 
+ 
 manager = ConnectionManager()
-
-
+ 
+ 
 # ═══════════════════════════════════════════════════════════════
 # WEBSOCKET ENDPOINT
 # ═══════════════════════════════════════════════════════════════
-
+ 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await manager.connect(ws)
@@ -152,12 +162,12 @@ async def websocket_endpoint(ws: WebSocket):
                 log.warning(f"WS message error: {e}")
     except WebSocketDisconnect:
         manager.disconnect(ws)
-
-
+ 
+ 
 # ═══════════════════════════════════════════════════════════════
 # FRONTEND → BACKEND ENDPOINTS
 # ═══════════════════════════════════════════════════════════════
-
+ 
 @app.post("/api/pin", summary="Frontend: configure or update a pin")
 async def set_pin(pin: PinConfig):
     """
@@ -168,14 +178,14 @@ async def set_pin(pin: PinConfig):
     await manager.broadcast({"type": "pin_config", "data": pin.dict()})
     log.info(f"POST /api/pin  GPIO {pin.gpio}  {pin.mode}/{pin.signal_type}  value={pin.value:.3f}")
     return {"status": "ok", "gpio": pin.gpio, "message": f"GPIO {pin.gpio} configured"}
-
-
+ 
+ 
 @app.get("/api/pin/{gpio_id}", summary="Frontend: get current state of a pin (INPUT polling)")
 async def get_pin(gpio_id: str):
     """
     Called by the frontend to poll live readings for INPUT pins.
     Returns the latest reading pushed by the ESP32 (or the config if no reading yet).
-
+ 
     Response shape the frontend expects:
       { gpio, value, signal_type, raw, unit, timestamp }
     """
@@ -190,7 +200,7 @@ async def get_pin(gpio_id: str):
             "unit": reading.unit,
             "timestamp": reading.timestamp or int(time.time() * 1000),
         }
-
+ 
     # No reading yet — return zeros with config info
     cfg = pin_configs.get(gpio_id)
     return {
@@ -201,8 +211,8 @@ async def get_pin(gpio_id: str):
         "unit": None,
         "timestamp": int(time.time() * 1000),
     }
-
-
+ 
+ 
 @app.get("/api/pins", summary="Frontend: get all pin states")
 async def get_all_pins():
     """Returns both configs and latest readings for all pins."""
@@ -210,8 +220,8 @@ async def get_all_pins():
         "configs": {k: v.dict() for k, v in pin_configs.items()},
         "readings": {k: v.dict() for k, v in pin_readings.items()},
     }
-
-
+ 
+ 
 @app.delete("/api/pin/{gpio_id}", summary="Frontend: reset a pin")
 async def reset_pin(gpio_id: str):
     pin_configs.pop(gpio_id, None)
@@ -219,28 +229,51 @@ async def reset_pin(gpio_id: str):
     pin_history.pop(gpio_id, None)
     await manager.broadcast({"type": "pin_reset", "gpio": gpio_id})
     return {"status": "ok", "gpio": gpio_id}
-
-
+ 
+ 
 @app.delete("/api/pins", summary="Frontend: reset all pins")
 async def reset_all_pins():
     pin_configs.clear()
     pin_readings.clear()
     pin_history.clear()
     await manager.broadcast({"type": "reset_all"})
+    log.info("All pins reset")
     return {"status": "ok", "message": "All pins reset"}
-
-
+ 
+ 
 # ═══════════════════════════════════════════════════════════════
 # ESP32 → BACKEND ENDPOINTS
 # ═══════════════════════════════════════════════════════════════
-
+ 
+@app.post("/api/esp32/ping", summary="ESP32: heartbeat / connectivity check")
+async def esp32_ping():
+    """
+    Called by the ESP32 periodically to signal it's alive.
+    Keeps hardware_status.last_esp32_ping updated.
+    """
+    now = int(time.time())
+    was_connected = hardware_status["esp32_connected"]
+    hardware_status["esp32_connected"] = True
+    hardware_status["last_esp32_ping"] = now
+    
+    if not was_connected:
+        log.info("[ESP32] Hardware connected!")
+        await manager.broadcast({
+            "type": "hardware_status",
+            "esp32_connected": True,
+            "timestamp": now,
+        })
+    
+    return {"status": "ok", "timestamp": now}
+ 
+ 
 @app.post("/api/esp32/reading", summary="ESP32: push a sensor reading")
 async def esp32_push_reading(reading: ESP32Reading):
     """
     Called by the ESP32 to push a live sensor reading.
     The frontend will pick this up on its next poll of GET /api/pin/{id}.
     Also broadcasts via WebSocket so connected frontends update instantly.
-
+ 
     Payload from ESP32:
       {
         "gpio": "34",
@@ -252,9 +285,9 @@ async def esp32_push_reading(reading: ESP32Reading):
     """
     if reading.timestamp is None:
         reading.timestamp = int(time.time() * 1000)
-
+ 
     pin_readings[reading.gpio] = reading
-
+ 
     # Push to history
     hist = get_history(reading.gpio)
     hist.appendleft({
@@ -262,7 +295,7 @@ async def esp32_push_reading(reading: ESP32Reading):
         "value": reading.value,
         "signal_type": reading.signal_type,
     })
-
+ 
     # Broadcast to frontend via WebSocket
     await manager.broadcast({
         "type": "pin_state",
@@ -275,16 +308,19 @@ async def esp32_push_reading(reading: ESP32Reading):
             "timestamp": reading.timestamp,
         }
     })
-
+ 
     return {"status": "ok", "gpio": reading.gpio}
-
-
+ 
+ 
 @app.post("/api/esp32/readings/batch", summary="ESP32: push multiple readings at once")
 async def esp32_push_batch(readings: List[ESP32Reading]):
     """
     ESP32 can push multiple pin readings in a single HTTP request.
-    More efficient than one request per pin.
+    Validates list length to prevent abuse.
     """
+    if not readings or len(readings) > 100:
+        return {"status": "error", "message": "Invalid batch size (1-100)"}
+    
     updated = []
     for reading in readings:
         if reading.timestamp is None:
@@ -293,22 +329,21 @@ async def esp32_push_batch(readings: List[ESP32Reading]):
         hist = get_history(reading.gpio)
         hist.appendleft({"ts": reading.timestamp, "value": reading.value, "signal_type": reading.signal_type})
         updated.append(reading.gpio)
-
-    # Single broadcast for all readings
+ 
     await manager.broadcast({
         "type": "batch_readings",
         "readings": [r.dict() for r in readings],
     })
-
+ 
     return {"status": "ok", "updated": updated}
-
-
+ 
+ 
 @app.get("/api/esp32/output/{gpio_id}", summary="ESP32: get the current output command for a pin")
 async def esp32_get_output(gpio_id: str):
     """
     Called by the ESP32 to get what value it should output on a pin.
     The frontend sets this via POST /api/pin when the user moves a slider.
-
+ 
     Response the ESP32 should parse:
       {
         "gpio": "25",
@@ -333,7 +368,7 @@ async def esp32_get_output(gpio_id: str):
             "mode": None,
             "value": 0.0,
         }
-
+ 
     return {
         "gpio": gpio_id,
         "configured": True,
@@ -348,8 +383,8 @@ async def esp32_get_output(gpio_id: str):
         "frequency": cfg.frequency,
         "pull_mode": cfg.pull_mode,
     }
-
-
+ 
+ 
 @app.get("/api/esp32/outputs", summary="ESP32: get ALL output pin commands at once")
 async def esp32_get_all_outputs():
     """
@@ -370,8 +405,8 @@ async def esp32_get_all_outputs():
                 "frequency": cfg.frequency,
             }
     return {"outputs": outputs}
-
-
+ 
+ 
 @app.get("/api/esp32/inputs", summary="ESP32: get all configured INPUT pins")
 async def esp32_get_all_inputs():
     """
@@ -387,22 +422,49 @@ async def esp32_get_all_inputs():
                 "pull_mode": cfg.pull_mode,
             }
     return {"inputs": inputs}
-
-
+ 
+ 
+# ═══════════════════════════════════════════════════════════════
+# HARDWARE STATUS ENDPOINTS
+# ═══════════════════════════════════════════════════════════════
+ 
+@app.get("/api/hardware/status", summary="Get hardware connectivity status")
+async def get_hardware_status():
+    """Returns current hardware connection status with timeout check."""
+    now = int(time.time())
+    last_ping = hardware_status["last_esp32_ping"]
+    timeout = hardware_status["esp32_timeout_seconds"]
+    
+    # Check if ESP32 has timed out
+    if last_ping is None:
+        is_connected = False
+    else:
+        is_connected = (now - last_ping) < timeout
+    
+    hardware_status["esp32_connected"] = is_connected
+    
+    return {
+        "esp32_connected": is_connected,
+        "last_esp32_ping": last_ping,
+        "timeout_seconds": timeout,
+        "current_time": now,
+    }
+ 
+ 
 # ═══════════════════════════════════════════════════════════════
 # HISTORY ENDPOINT
 # ═══════════════════════════════════════════════════════════════
-
+ 
 @app.get("/api/pin/{gpio_id}/history", summary="Get signal history for a pin")
 async def get_pin_history(gpio_id: str, limit: int = 100):
     hist = list(get_history(gpio_id))
     return {"gpio": gpio_id, "history": hist[:limit], "total": len(hist)}
-
-
+ 
+ 
 # ═══════════════════════════════════════════════════════════════
 # HEALTH
 # ═══════════════════════════════════════════════════════════════
-
+ 
 @app.get("/health", summary="Health check")
 async def health():
     return {
@@ -410,10 +472,11 @@ async def health():
         "ws_clients": len(manager.active),
         "configured_pins": len(pin_configs),
         "active_readings": len(pin_readings),
+        "esp32_connected": hardware_status["esp32_connected"],
         "uptime_ms": int(time.time() * 1000),
     }
-
-
+ 
+ 
 @app.get("/", summary="API info")
 async def root():
     return {
@@ -422,7 +485,7 @@ async def root():
         "docs": "/docs",
         "health": "/health",
         "endpoints": {
-            "frontend": ["POST /api/pin", "GET /api/pin/{id}", "GET /api/pins", "DELETE /api/pin/{id}", "WS /ws"],
-            "esp32":    ["POST /api/esp32/reading", "POST /api/esp32/readings/batch", "GET /api/esp32/output/{id}", "GET /api/esp32/outputs", "GET /api/esp32/inputs"],
+            "frontend": ["POST /api/pin", "GET /api/pin/{id}", "GET /api/pins", "DELETE /api/pin/{id}", "GET /api/hardware/status", "WS /ws"],
+            "esp32":    ["POST /api/esp32/ping", "POST /api/esp32/reading", "POST /api/esp32/readings/batch", "GET /api/esp32/output/{id}", "GET /api/esp32/outputs", "GET /api/esp32/inputs"],
         }
     }
